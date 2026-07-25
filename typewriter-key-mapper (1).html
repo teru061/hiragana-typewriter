@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key mapper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink-bg: #201c18;
+    --paper: #ece5d6;
+    --paper-dim: #b9b0a0;
+    --key-face: #37312a;
+    --key-face-hover: #423b32;
+    --key-ring: #574e42;
+    --brass: #c99149;
+    --brass-dim: #7a5a30;
+    --danger: #b5533f;
+    --ok: #7fa66a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--ink-bg);
+    color: var(--paper);
+    font-family: 'Courier Prime', monospace;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding: 32px 16px 48px;
+  }
+  h1{
+    font-family:'Special Elite', 'Courier Prime', monospace;
+    font-weight:400;
+    font-size:22px;
+    letter-spacing:1px;
+    margin:0 0 4px;
+    color:var(--paper);
+  }
+  .subtitle{
+    font-size:12px;
+    color:var(--paper-dim);
+    margin:0 0 20px;
+    text-align:center;
+    max-width:480px;
+    line-height:1.6;
+  }
+  .toolbar{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  button.action{
+    font-family:'Courier Prime', monospace;
+    font-size:12px;
+    letter-spacing:0.5px;
+    background:var(--key-face);
+    color:var(--paper);
+    border:1px solid var(--key-ring);
+    border-radius:4px;
+    padding:8px 14px;
+    cursor:pointer;
+  }
+  button.action:hover{ background:var(--key-face-hover); }
+  button.action.danger{ border-color:var(--danger); color:var(--danger); }
+  #status{
+    font-size:11px;
+    color:var(--paper-dim);
+    min-width:150px;
+  }
+  #status.ok{ color:var(--ok); }
+  #status.err{ color:var(--danger); }
+  .board{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+  }
+  .row{
+    display:flex;
+    gap:10px;
+  }
+  .key{
+    width:54px;
+    height:54px;
+    border-radius:50%;
+    background:var(--key-face);
+    border:1px solid var(--key-ring);
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    justify-content:center;
+    position:relative;
+    cursor:text;
+    overflow:hidden;
+  }
+  .key:hover{ background:var(--key-face-hover); }
+  .half{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    line-height:1;
+    color:var(--paper-dim);
+    outline:none;
+    white-space:nowrap;
+    overflow:hidden;
+    padding:2px 4px;
+  }
+  .half.top{ border-bottom: 0.5px solid var(--key-ring); }
+  .half.active{
+    background:var(--brass);
+    color:#231a0e;
+    font-weight:700;
+  }
+  .shift-row{
+    margin-top:4px;
+  }
+  .shift-key{
+    width:150px;
+    height:64px;
+    border-radius:32px;
+    background:var(--key-face);
+    border:1.5px solid var(--brass-dim);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Special Elite', monospace;
+    font-size:14px;
+    letter-spacing:2px;
+    color:var(--paper);
+    cursor:pointer;
+    user-select:none;
+  }
+  .shift-key.on{
+    background:var(--brass);
+    color:#231a0e;
+    border-color:var(--brass);
+  }
+  .shift-key:hover{ filter:brightness(1.1); }
+  .hint{
+    font-size:10px;
+    color:var(--paper-dim);
+    margin-top:20px;
+    text-align:center;
+    max-width:420px;
+    line-height:1.6;
+  }
+
+</style>
+</head>
+<body>
+
+<h1>Key mapper</h1>
+<p class="subtitle">42 keys, two phrases per key. Click a half to edit it (up to 4 characters). Use SHIFT to switch which phrase is highlighted across the board. Saved locally in this browser — export a save file to share it, or import one someone sent you.</p>
+
+<div class="toolbar">
+  <button class="action" id="exportBtn">Export save file</button>
+  <button class="action" id="importBtn">Import save file</button>
+  <input type="file" id="importInput" accept="application/json" style="display:none">
+  <button class="action danger" id="clearBtn">Clear all</button>
+  <span id="status">Loading…</span>
+</div>
+
+<div class="board" id="board"></div>
+
+<div class="shift-row">
+  <div class="shift-key" id="shiftKey">SHIFT</div>
+</div>
+
+<p class="hint">Row layout: 10 / 11 / 11 / 10, with SHIFT anchored bottom left, matching a typewriter's stagger.</p>
+
+<script>
+const STORAGE_KEY = 'typewriter-keys-v1';
+const ROW_SIZES = [10, 11, 11, 10];
+const TOTAL_KEYS = ROW_SIZES.reduce((a,b)=>a+b,0);
+const ROW_OFFSETS = [0, 28, 42, 66];
+
+let keys = Array.from({length: TOTAL_KEYS}, () => ({a:'', b:''}));
+let shiftOn = false;
+let writeTimer = null;
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const shiftKeyEl = document.getElementById('shiftKey');
+
+function clampText(s){
+  return (s || '').replace(/\n/g,'').slice(0,4);
+}
+
+function render(){
+  const focused = document.activeElement;
+  const focusedInfo = (focused && focused.classList && focused.classList.contains('half'))
+    ? { keyIndex: Number(focused.dataset.keyIndex), which: focused.dataset.which }
+    : null;
+
+  boardEl.innerHTML = '';
+  let idx = 0;
+  ROW_SIZES.forEach((count, rowIdx) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.marginLeft = ROW_OFFSETS[rowIdx] + 'px';
+    for(let i=0; i<count; i++){
+      const k = idx;
+      const data = keys[k];
+      const keyEl = document.createElement('div');
+      keyEl.className = 'key';
+
+      const topEl = document.createElement('div');
+      topEl.className = 'half top' + (!shiftOn ? ' active' : '');
+      topEl.contentEditable = 'true';
+      topEl.spellcheck = false;
+      topEl.dataset.keyIndex = k;
+      topEl.dataset.which = 'a';
+      topEl.textContent = data.a;
+      topEl.addEventListener('input', () => {
+        data.a = clampText(topEl.textContent);
+        if(clampText(topEl.textContent) !== topEl.textContent) topEl.textContent = data.a;
+        scheduleWrite();
+      });
+      topEl.addEventListener('keydown', (e) => { if(e.key === 'Enter') e.preventDefault(); });
+
+      const bottomEl = document.createElement('div');
+      bottomEl.className = 'half bottom' + (shiftOn ? ' active' : '');
+      bottomEl.contentEditable = 'true';
+      bottomEl.spellcheck = false;
+      bottomEl.dataset.keyIndex = k;
+      bottomEl.dataset.which = 'b';
+      bottomEl.textContent = data.b;
+      bottomEl.addEventListener('input', () => {
+        data.b = clampText(bottomEl.textContent);
+        if(clampText(bottomEl.textContent) !== bottomEl.textContent) bottomEl.textContent = data.b;
+        scheduleWrite();
+      });
+      bottomEl.addEventListener('keydown', (e) => { if(e.key === 'Enter') e.preventDefault(); });
+
+      keyEl.appendChild(topEl);
+      keyEl.appendChild(bottomEl);
+      row.appendChild(keyEl);
+      idx++;
+    }
+    boardEl.appendChild(row);
+  });
+  shiftKeyEl.classList.toggle('on', shiftOn);
+
+  if(focusedInfo){
+    const selector = '.half[data-key-index="' + focusedInfo.keyIndex + '"][data-which="' + focusedInfo.which + '"]';
+    const el = boardEl.querySelector(selector);
+    if(el){
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+}
+
+function scheduleWrite(){
+  setStatus('Editing…', '');
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(saveToStorage, 400);
+}
+
+function setStatus(text, cls){
+  statusEl.textContent = text;
+  statusEl.className = cls || '';
+}
+
+function saveToStorage(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+    setStatus('Saved', 'ok');
+  }catch(err){
+    setStatus('Save failed', 'err');
+  }
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  keys = Array.from({length: TOTAL_KEYS}, () => ({a:'', b:''}));
+  render();
+  scheduleWrite();
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const payload = {
+    type: 'typewriter-key-mapper',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    keys: keys
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = payload.exportedAt.slice(0,10);
+  a.href = url;
+  a.download = 'typewriter-board-' + stamp + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus('Exported', 'ok');
+});
+
+const importInput = document.getElementById('importInput');
+document.getElementById('importBtn').addEventListener('click', () => {
+  importInput.value = '';
+  importInput.click();
+});
+importInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      const incoming = Array.isArray(parsed) ? parsed : parsed.keys;
+      if(!Array.isArray(incoming) || incoming.length !== TOTAL_KEYS){
+        setStatus('Import failed — wrong file', 'err');
+        return;
+      }
+      keys = incoming.map(k => ({ a: clampText(k && k.a), b: clampText(k && k.b) }));
+      render();
+      saveToStorage();
+      setStatus('Imported', 'ok');
+    }catch(err){
+      setStatus('Import failed — invalid file', 'err');
+    }
+  };
+  reader.readAsText(file);
+});
+
+shiftKeyEl.addEventListener('click', () => {
+  shiftOn = !shiftOn;
+  render();
+});
+
+function loadFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed) && parsed.length === TOTAL_KEYS){
+        keys = parsed;
+      }
+    }
+    setStatus('Loaded', 'ok');
+  }catch(err){
+    setStatus('No saved data yet', '');
+  }
+  render();
+}
+
+function init(){
+  loadFromStorage();
+}
+
+init();
+</script>
+</body>
+</html>
