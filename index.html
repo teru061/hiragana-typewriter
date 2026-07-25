@@ -120,11 +120,19 @@
     color:#231a0e;
     font-weight:700;
   }
-  .shift-row{
-    margin-top:4px;
+  .half.enlarged{
+    font-size:15px;
   }
-  .shift-key{
-    width:150px;
+  .half.hidden{
+    display:none;
+  }
+  .mode-row{
+    margin-top:4px;
+    display:flex;
+    gap:10px;
+  }
+  .mode-key{
+    width:70px;
     height:64px;
     border-radius:32px;
     background:var(--key-face);
@@ -133,18 +141,18 @@
     align-items:center;
     justify-content:center;
     font-family:'Special Elite', monospace;
-    font-size:14px;
-    letter-spacing:2px;
+    font-size:12px;
+    letter-spacing:1px;
     color:var(--paper);
     cursor:pointer;
     user-select:none;
   }
-  .shift-key.on{
+  .mode-key.on{
     background:var(--brass);
     color:#231a0e;
     border-color:var(--brass);
   }
-  .shift-key:hover{ filter:brightness(1.1); }
+  .mode-key:hover{ filter:brightness(1.1); }
   .hint{
     font-size:10px;
     color:var(--paper-dim);
@@ -159,7 +167,9 @@
 <body>
 
 <h1>Key mapper</h1>
-<p class="subtitle">42 keys, two phrases per key. Click a half to edit it (up to 4 characters). Use SHIFT to switch which phrase is highlighted across the board. Saved locally in this browser — export a save file to share it, or import one someone sent you.</p>
+<p class="subtitle"> 
+
+  Shift and FIG (from Figures on 3-bank typewriter keyboards) will emphasize/hide keysets. All changes are saved locally in your browser. </p>
 
 <div class="toolbar">
   <button class="action" id="exportBtn">Export save file</button>
@@ -171,28 +181,42 @@
 
 <div class="board" id="board"></div>
 
-<div class="shift-row">
-  <div class="shift-key" id="shiftKey">SHIFT</div>
+<div class="mode-row">
+  <div class="mode-key" id="shiftKey">SHIFT</div>
+  <div class="mode-key" id="figKey">FIG</div>
 </div>
 
-<p class="hint">Row layout: 10 / 11 / 11 / 10, with SHIFT anchored bottom left, matching a typewriter's stagger.</p>
+<p class="hint"></p>
 
 <script>
 const STORAGE_KEY = 'typewriter-keys-v1';
 const ROW_SIZES = [10, 11, 11, 10];
 const TOTAL_KEYS = ROW_SIZES.reduce((a,b)=>a+b,0);
-const ROW_OFFSETS = [0, 28, 42, 66];
+const ROW_OFFSETS = [64, 28, 42, 66];
 
 let keys = Array.from({length: TOTAL_KEYS}, () => ({a:'', b:''}));
-let shiftOn = false;
+let mode = 'none'; // 'none' | 'shift' | 'fig'
 let writeTimer = null;
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
 const shiftKeyEl = document.getElementById('shiftKey');
+const figKeyEl = document.getElementById('figKey');
 
 function clampText(s){
   return (s || '').replace(/\n/g,'').slice(0,4);
+}
+
+function topClasses(){
+  if(mode === 'shift') return 'half active enlarged';
+  if(mode === 'fig') return 'half hidden';
+  return 'half top';
+}
+
+function bottomClasses(){
+  if(mode === 'fig') return 'half active enlarged';
+  if(mode === 'shift') return 'half hidden';
+  return 'half';
 }
 
 function render(){
@@ -214,7 +238,7 @@ function render(){
       keyEl.className = 'key';
 
       const topEl = document.createElement('div');
-      topEl.className = 'half top' + (!shiftOn ? ' active' : '');
+      topEl.className = topClasses();
       topEl.contentEditable = 'true';
       topEl.spellcheck = false;
       topEl.dataset.keyIndex = k;
@@ -228,7 +252,7 @@ function render(){
       topEl.addEventListener('keydown', (e) => { if(e.key === 'Enter') e.preventDefault(); });
 
       const bottomEl = document.createElement('div');
-      bottomEl.className = 'half bottom' + (shiftOn ? ' active' : '');
+      bottomEl.className = bottomClasses();
       bottomEl.contentEditable = 'true';
       bottomEl.spellcheck = false;
       bottomEl.dataset.keyIndex = k;
@@ -248,7 +272,8 @@ function render(){
     }
     boardEl.appendChild(row);
   });
-  shiftKeyEl.classList.toggle('on', shiftOn);
+  shiftKeyEl.classList.toggle('on', mode === 'shift');
+  figKeyEl.classList.toggle('on', mode === 'fig');
 
   if(focusedInfo){
     const selector = '.half[data-key-index="' + focusedInfo.keyIndex + '"][data-which="' + focusedInfo.which + '"]';
@@ -340,7 +365,12 @@ importInput.addEventListener('change', (e) => {
 });
 
 shiftKeyEl.addEventListener('click', () => {
-  shiftOn = !shiftOn;
+  mode = (mode === 'shift') ? 'none' : 'shift';
+  render();
+});
+
+figKeyEl.addEventListener('click', () => {
+  mode = (mode === 'fig') ? 'none' : 'fig';
   render();
 });
 
