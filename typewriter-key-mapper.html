@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key mapper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink-bg: #201c18;
+    --paper: #ece5d6;
+    --paper-dim: #b9b0a0;
+    --key-face: #37312a;
+    --key-face-hover: #423b32;
+    --key-ring: #574e42;
+    --brass: #c99149;
+    --brass-dim: #7a5a30;
+    --danger: #b5533f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--ink-bg);
+    color: var(--paper);
+    font-family: 'Courier Prime', monospace;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding: 32px 16px 48px;
+  }
+  h1{
+    font-family:'Special Elite', 'Courier Prime', monospace;
+    font-weight:400;
+    font-size:22px;
+    letter-spacing:1px;
+    margin:0 0 4px;
+    color:var(--paper);
+  }
+  .subtitle{
+    font-size:12px;
+    color:var(--paper-dim);
+    margin:0 0 24px;
+    text-align:center;
+    max-width:480px;
+    line-height:1.6;
+  }
+  .toolbar{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  button.action{
+    font-family:'Courier Prime', monospace;
+    font-size:12px;
+    letter-spacing:0.5px;
+    background:var(--key-face);
+    color:var(--paper);
+    border:1px solid var(--key-ring);
+    border-radius:4px;
+    padding:8px 14px;
+    cursor:pointer;
+  }
+  button.action:hover{ background:var(--key-face-hover); }
+  button.action.primary{ border-color:var(--brass); color:var(--brass); }
+  button.action.danger{ border-color:var(--danger); color:var(--danger); }
+  #status{
+    font-size:11px;
+    color:var(--paper-dim);
+    min-width:110px;
+  }
+  .board{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+  }
+  .row{
+    display:flex;
+    gap:10px;
+  }
+  .key{
+    width:54px;
+    height:54px;
+    border-radius:50%;
+    background:var(--key-face);
+    border:1px solid var(--key-ring);
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    justify-content:center;
+    position:relative;
+    cursor:text;
+  }
+  .key:hover{ background:var(--key-face-hover); }
+  .half{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    line-height:1;
+    color:var(--paper-dim);
+    outline:none;
+    white-space:nowrap;
+    overflow:hidden;
+    padding:2px 4px;
+    border-radius:3px;
+  }
+  .half.top{ border-bottom: 0.5px solid var(--key-ring); }
+  .half.active{
+    background:var(--brass);
+    color:#231a0e;
+    font-weight:700;
+  }
+  .shift-row{
+    margin-top:4px;
+  }
+  .shift-key{
+    width:150px;
+    height:64px;
+    border-radius:32px;
+    background:var(--key-face);
+    border:1.5px solid var(--brass-dim);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Special Elite', monospace;
+    font-size:14px;
+    letter-spacing:2px;
+    color:var(--paper);
+    cursor:pointer;
+    user-select:none;
+  }
+  .shift-key.on{
+    background:var(--brass);
+    color:#231a0e;
+    border-color:var(--brass);
+  }
+  .shift-key:hover{ filter:brightness(1.1); }
+  .hint{
+    font-size:10px;
+    color:var(--paper-dim);
+    margin-top:20px;
+    text-align:center;
+    max-width:420px;
+    line-height:1.6;
+  }
+  .share-note{
+    font-size:10px;
+    color:var(--brass-dim);
+    margin-top:6px;
+    text-align:center;
+    max-width:420px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Key mapper</h1>
+<p class="subtitle">42 keys, two phrases per key. Click a half to edit it (up to 4 characters). Use SHIFT to switch which phrase is highlighted across the board.</p>
+
+<div class="toolbar">
+  <button class="action primary" id="saveBtn">Save</button>
+  <button class="action danger" id="clearBtn">Clear all</button>
+  <span id="status">Loading…</span>
+</div>
+
+<div class="board" id="board"></div>
+
+<div class="shift-row">
+  <div class="shift-key" id="shiftKey">SHIFT</div>
+</div>
+
+<p class="hint">Row layout: 10 / 11 / 11 / 10, with SHIFT anchored bottom left, matching a typewriter's stagger.</p>
+<p class="share-note">Saved data is shared: anyone who opens this tool sees the same saved keys.</p>
+
+<script>
+const ROW_SIZES = [10, 11, 11, 10];
+const TOTAL_KEYS = ROW_SIZES.reduce((a,b)=>a+b,0);
+const ROW_OFFSETS = [0, 28, 42, 66];
+
+let keys = Array.from({length: TOTAL_KEYS}, () => ({a:'', b:''}));
+let shiftOn = false;
+let saveTimer = null;
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const shiftKeyEl = document.getElementById('shiftKey');
+
+function clampText(s){
+  return (s || '').replace(/\n/g,'').slice(0,4);
+}
+
+function render(){
+  boardEl.innerHTML = '';
+  let idx = 0;
+  ROW_SIZES.forEach((count, rowIdx) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.marginLeft = ROW_OFFSETS[rowIdx] + 'px';
+    for(let i=0; i<count; i++){
+      const k = idx;
+      const data = keys[k];
+      const keyEl = document.createElement('div');
+      keyEl.className = 'key';
+
+      const topEl = document.createElement('div');
+      topEl.className = 'half top' + (!shiftOn ? ' active' : '');
+      topEl.contentEditable = 'true';
+      topEl.spellcheck = false;
+      topEl.textContent = data.a;
+      topEl.addEventListener('input', () => {
+        data.a = clampText(topEl.textContent);
+        if(clampText(topEl.textContent) !== topEl.textContent) topEl.textContent = data.a;
+        markUnsaved();
+      });
+      topEl.addEventListener('keydown', (e) => { if(e.key === 'Enter') e.preventDefault(); });
+
+      const bottomEl = document.createElement('div');
+      bottomEl.className = 'half bottom' + (shiftOn ? ' active' : '');
+      bottomEl.contentEditable = 'true';
+      bottomEl.spellcheck = false;
+      bottomEl.textContent = data.b;
+      bottomEl.addEventListener('input', () => {
+        data.b = clampText(bottomEl.textContent);
+        if(clampText(bottomEl.textContent) !== bottomEl.textContent) bottomEl.textContent = data.b;
+        markUnsaved();
+      });
+      bottomEl.addEventListener('keydown', (e) => { if(e.key === 'Enter') e.preventDefault(); });
+
+      keyEl.appendChild(topEl);
+      keyEl.appendChild(bottomEl);
+      row.appendChild(keyEl);
+      idx++;
+    }
+    boardEl.appendChild(row);
+  });
+  shiftKeyEl.classList.toggle('on', shiftOn);
+}
+
+function markUnsaved(){
+  statusEl.textContent = 'Unsaved changes';
+}
+
+async function loadKeys(){
+  try{
+    const result = await window.storage.get('typewriter-keys', true);
+    if(result && result.value){
+      const parsed = JSON.parse(result.value);
+      if(Array.isArray(parsed) && parsed.length === TOTAL_KEYS){
+        keys = parsed;
+      }
+    }
+    statusEl.textContent = 'Loaded';
+  }catch(err){
+    statusEl.textContent = 'No saved data yet';
+  }
+  render();
+}
+
+async function saveKeys(){
+  statusEl.textContent = 'Saving…';
+  try{
+    const result = await window.storage.set('typewriter-keys', JSON.stringify(keys), true);
+    statusEl.textContent = result ? 'Saved' : 'Save failed';
+  }catch(err){
+    statusEl.textContent = 'Save failed';
+  }
+}
+
+document.getElementById('saveBtn').addEventListener('click', saveKeys);
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  keys = Array.from({length: TOTAL_KEYS}, () => ({a:'', b:''}));
+  render();
+  markUnsaved();
+});
+
+shiftKeyEl.addEventListener('click', () => {
+  shiftOn = !shiftOn;
+  render();
+});
+
+loadKeys();
+</script>
+</body>
+</html>
