@@ -4,3 +4,4 @@ In this file, the .json file contains my best-guess/reasoned and researched esti
 
 A future development for this project -- should I get to it, and certainly after this typewriter gets fully demystified -- would be the addition of a keyboard identifying prediction layer or perhaps an option to add keyboards to your device. Don't count on this happening, though.
 
+This project contains some AI-generated contents. 
